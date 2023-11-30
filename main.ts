@@ -3,15 +3,21 @@ import fs from "node:fs/promises";
 import { pdf } from "pdf-to-img";
 
 async function processFile(file: string, scheduler: Scheduler): Promise<void> {
-  const pdfImage = await pdf(`./arquivos/${file}`, { scale: 3 });
+  let data;
 
-  for await (const image of pdfImage) {
-    await fs.writeFile(`./tmp/${file}.png`, image);
+  try {
+    const pdfImage = await pdf(`./arquivos/${file}`, { scale: 3 });
+
+    for await (const image of pdfImage) {
+      await fs.writeFile(`./tmp/${file}.png`, image);
+    }
+
+    const ret = await scheduler.addJob("recognize", `./tmp/${file}.png`);
+
+    data = ret.data.text;
+  } catch (error) {
+    console.log({ file, error });
   }
-
-  const ret = await scheduler.addJob("recognize", `./tmp/${file}.png`);
-
-  const data = ret.data.text;
 
   if (!data) {
     await fs.rename(`./arquivos/${file}`, `./arquivos/FALHOU - ${file}`);
@@ -113,7 +119,9 @@ const workerGen = async (scheduler: Scheduler) => {
 };
 
 async function main() {
-  const files = await fs.readdir("./arquivos");
+  const files = (await fs.readdir("./arquivos")).filter((file) =>
+    file.includes(".pdf"),
+  );
 
   const scheduler = createScheduler();
 
