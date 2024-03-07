@@ -14,7 +14,18 @@ async function processFile(file: string, scheduler: Scheduler): Promise<void> {
 
     const ret = await scheduler.addJob("recognize", `./tmp/${file}.png`);
 
+    await fs.unlink(`./tmp/${file}.png`);
+
     data = ret.data.text;
+
+    // await fs.writeFile(`${file} - out.txt`, data);
+
+    await fs.appendFile(
+      `./out.log`,
+      `[${new Date().toISOString()}] [arquivo: ${file}, data:${JSON.stringify(
+        data,
+      )}]\n`,
+    );
   } catch (error) {
     console.log({ file, error });
   }
@@ -42,6 +53,31 @@ async function processFile(file: string, scheduler: Scheduler): Promise<void> {
   // Não foi possível encontrar a nota fiscal
   if (isNaN(number)) {
     number = "";
+  }
+
+  /**
+   * Pegar número do pedido
+   */
+  let pedido;
+
+  // Ne: 000003911
+  pedido = Number(
+    data
+      .split("Pedido")?.[1]
+      ?.split(/(\d+)/)
+      ?.filter((item: any) => !isNaN(item))?.[0],
+  );
+
+  // NF-e N° 000003911
+  if (isNaN(pedido)) {
+    pedido = Number(
+      data.toUpperCase()?.split("NF-E")?.[1]?.trim()?.split(" ")?.[1],
+    );
+  }
+
+  // Não foi possível encontrar a nota fiscal
+  if (isNaN(pedido)) {
+    pedido = "";
   }
 
   /**
@@ -98,7 +134,10 @@ async function processFile(file: string, scheduler: Scheduler): Promise<void> {
   name = name.replace(/[^\w\s]/gi, "");
 
   try {
-    await fs.rename(`./arquivos/${file}`, `./arquivos/${name} - ${number}.pdf`);
+    await fs.rename(
+      `./arquivos/${file}`,
+      `./arquivos/${name} - Nota ${number} - Pedido ${pedido}.pdf`,
+    );
   } catch (error: any) {
     await fs.rename(`./arquivos/${file}`, `./arquivos/FALHOU - ${file}`);
 
@@ -130,7 +169,7 @@ async function main() {
    */
   console.log("Criando workers");
   console.time("workers");
-  const workers = 10;
+  const workers = 50;
   await Promise.all(
     Array(workers)
       .fill(0)
